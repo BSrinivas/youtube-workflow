@@ -41,7 +41,7 @@ class ScriptGenerator:
     def __init__(self):
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-        self.model_groq = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+        self.model_groq = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         self.model_ollama = os.getenv("OLLAMA_MODEL", "llama3")
 
     def generate(self, topic: str) -> dict:
@@ -72,6 +72,8 @@ class ScriptGenerator:
             "max_tokens": 1500,
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=60)
+        if not resp.ok:
+            log.error(f"Groq error {resp.status_code}: {resp.text}")
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
         return self._parse_json(raw)
@@ -98,6 +100,9 @@ class ScriptGenerator:
         clean = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         try:
             return json.loads(clean)
-        except json.JSONDecodeError as e:
-            log.error(f"Failed to parse script JSON: {e}\nRaw:\n{raw}")
-            raise
+        except json.JSONDecodeError:
+            try:
+                return json.loads(clean, strict=False)
+            except json.JSONDecodeError as e:
+                log.error(f"Failed to parse script JSON: {e}\nRaw:\n{raw}")
+                raise

@@ -84,11 +84,18 @@ class VisualsFetcher:
                     return f["link"]
         return files[0]["link"] if files else None
 
-    def _stream_download(self, url: str, output_path: Path) -> Path:
-        with requests.get(url, stream=True, timeout=60) as r:
-            r.raise_for_status()
-            with open(output_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        log.info(f"    Downloaded → {output_path.name}")
-        return output_path
+    def _stream_download(self, url: str, output_path: Path, retries: int = 3) -> Path:
+        for attempt in range(1, retries + 1):
+            try:
+                with requests.get(url, stream=True, timeout=120) as r:
+                    r.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=65536):
+                            f.write(chunk)
+                log.info(f"    Downloaded -> {output_path.name}")
+                return output_path
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                log.warning(f"    Download attempt {attempt}/{retries} failed: {e}")
+                if attempt == retries:
+                    raise
+                time.sleep(2 * attempt)

@@ -5,10 +5,16 @@ Whisper (openai-whisper, free) generates word-level subtitle timing.
 """
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+FFMPEG = os.getenv(
+    "FFMPEG_PATH",
+    r"C:\Users\srini\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin\ffmpeg.exe",
+)
 
 
 class VideoEditor:
@@ -60,7 +66,7 @@ class VideoEditor:
             dur = c["duration_seconds"]
             # Scale to target resolution, trim/loop, strip audio
             cmd = [
-                "ffmpeg", "-y",
+                FFMPEG, "-y",
                 "-stream_loop", "-1",          # loop if clip is too short
                 "-i", str(c["clip_path"]),
                 "-t", str(dur),
@@ -79,7 +85,7 @@ class VideoEditor:
         list_file = output.parent / "clip_list.txt"
         list_file.write_text("\n".join(f"file '{p.resolve()}'" for p in clip_paths))
         cmd = [
-            "ffmpeg", "-y",
+            FFMPEG, "-y",
             "-f", "concat", "-safe", "0",
             "-i", str(list_file),
             "-c", "copy",
@@ -89,7 +95,7 @@ class VideoEditor:
 
     def _mix_audio(self, video: Path, audio: Path, output: Path):
         cmd = [
-            "ffmpeg", "-y",
+            FFMPEG, "-y",
             "-i", str(video),
             "-i", str(audio),
             "-c:v", "copy",
@@ -131,10 +137,12 @@ class VideoEditor:
             "OutlineColour=&H000000,Outline=2,Bold=1,"
             "Alignment=2,MarginV=40"
         )
+        # ffmpeg subtitles filter needs forward slashes and escaped colons on Windows
+        srt_escaped = str(srt.resolve()).replace("\\", "/").replace(":", "\\:")
         cmd = [
-            "ffmpeg", "-y",
+            FFMPEG, "-y",
             "-i", str(video),
-            "-vf", f"subtitles={srt}:force_style='{style}'",
+            "-vf", f"subtitles='{srt_escaped}':force_style='{style}'",
             "-c:a", "copy",
             "-c:v", "libx264", "-preset", "fast", "-crf", "20",
             str(output),

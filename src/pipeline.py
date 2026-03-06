@@ -9,6 +9,15 @@ import logging
 import argparse
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent / ".env")
+
+# Ensure ffmpeg is on PATH (Windows WinGet install location)
+import os as _os
+_ffmpeg_bin = r"C:\Users\srini\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin"
+if _ffmpeg_bin not in _os.environ.get("PATH", ""):
+    _os.environ["PATH"] = _ffmpeg_bin + _os.pathsep + _os.environ.get("PATH", "")
 
 from script_generator import ScriptGenerator
 from voiceover import VoiceoverGenerator
