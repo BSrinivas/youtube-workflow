@@ -1,0 +1,90 @@
+name: YouTube Automation Pipeline
+
+on:
+  # ── Scheduled runs ──────────────────────────────────────────────
+  schedule:
+    - cron: "0 10 * * 1,3,5"   # Mon / Wed / Fri at 10:00 UTC
+
+  # ── Manual trigger with custom topic ───────────────────────────
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Video topic (e.g. '5 Python tips for beginners')"
+        required: true
+        default: "Top 5 Python productivity tips"
+      dry_run:
+        description: "Skip YouTube upload (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. System deps (FFmpeg) ──────────────────────────────────
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+
+      # ── 3. Python + pip ─────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── 4. Restore YouTube OAuth token ──────────────────────────
+      - name: Restore YouTube OAuth token
+        env:
+          YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+        run: |
+          echo "$YOUTUBE_TOKEN_JSON" > token.json
+
+      # ── 5. Pick topic (scheduled vs manual) ─────────────────────
+      - name: Resolve video topic
+        id: topic
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TOPIC=${{ github.event.inputs.topic }}" >> $GITHUB_ENV
+            echo "DRY_RUN=${{ github.event.inputs.dry_run }}" >> $GITHUB_ENV
+          else
+            # Auto-pick from topics list on scheduled runs
+            python - <<'EOF'
+          import json, random, os
+          with open("topics.json") as f:
+              topics = json.load(f)
+          topic = random.choice(topics)
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"TOPIC={topic}\nDRY_RUN=false\n")
+          EOF
+          fi
+
+      # ── 6. Run pipeline ──────────────────────────────────────────
+      - name: Run pipeline
+        env:
+          GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY:   ${{ secrets.PEXELS_API_KEY }}
+          CLIENT_SECRETS_FILE: client_secrets.json
+        run: |
+          DRY_FLAG=""
+          if [ "$DRY_RUN" = "true" ]; then DRY_FLAG="--dry-run"; fi
+          python src/pipeline.py "$TOPIC" $DRY_FLAG
+
+      # ── 7. Upload output artefacts ───────────────────────────────
+      - name: Upload video artefact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: video-output
+          path: output/
+          retention-days: 3

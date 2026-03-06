@@ -1,0 +1,25 @@
+# Secrets — never commit these
+.env
+token.json
+client_secrets.json
+
+# Pipeline output
+output/
+*.mp4
+*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+pipeline.log
